@@ -116,6 +116,7 @@ type InfiniBandPort struct {
 	Rate        uint64 // in bytes/second from /sys/class/infiniband/<Name>/ports/<Port>/rate
 	Counters    InfiniBandCounters
 	HwCounters  InfiniBandHwCounters
+	LinkLayer   string // String representation from /sys/class/infiniband/<Name>/ports/<Port>/link_layer
 }
 
 // InfiniBandDevice contains info from files in /sys/class/infiniband for a
@@ -151,7 +152,12 @@ func (fs FS) InfiniBandClass() (InfiniBandClass, error) {
 			return nil, err
 		}
 
-		ibc[device.Name] = *device
+		for _, port := range device.Ports {
+			if port.LinkLayer == "InfiniBand" {
+				ibc[device.Name] = *device
+				break
+			}
+		}
 	}
 
 	return ibc, nil
@@ -248,7 +254,15 @@ func (fs FS) parseInfiniBandPort(name string, port string) (*InfiniBandPort, err
 	ibp := InfiniBandPort{Name: name, Port: uint(portNumber)}
 
 	portPath := fs.sys.Path(infinibandClassPath, name, "ports", port)
-	content, err := os.ReadFile(filepath.Join(portPath, "state"))
+
+	content, err := os.ReadFile(filepath.Join(portPath, "link_layer"))
+	if err != nil {
+		return nil, err
+	}
+	link_layer := string(content)
+	ibp.LinkLayer = link_layer
+
+	content, err = os.ReadFile(filepath.Join(portPath, "state"))
 	if err != nil {
 		return nil, err
 	}
